@@ -28,6 +28,12 @@ fi
 # Define the Python binary path
 PYTHON_BIN="/opt/homebrew/bin/python3.11"
 
+# --- Build Preparation ---
+echo "Preparing a clean build environment..."
+
+# Remove old build artifacts to ensure a fresh start
+rm -rf build dist
+
 # Create and activate a virtual environment
 if [ ! -d "venv" ]; then
     $PYTHON_BIN -m venv venv
@@ -41,33 +47,39 @@ pip install -r requirements.txt
 # --- CRITICAL FIX: Patch setup.py ---
 # This section automatically fixes the known issues in the setup.py file.
 echo "Patching setup.py for modern macOS compatibility..."
-
-# Fix 1: Disable 'argv_emulation' to prevent the obsolete Carbon framework error.
 sed -i.bak "s/'argv_emulation': True,/'argv_emulation': False,/" setup.py
-
-# Fix 2: Add 'Quartz' to the 'includes' list, which is required by pynput.
 sed -i.bak "s/'includes': \['AppKit', 'Foundation'\]/'includes': \['AppKit', 'Foundation', 'Quartz'\]/" setup.py
 
-echo "Patching complete."
-# --- End of Patch ---
-
+echo "--- Verifying Patches ---"
+cat setup.py
+echo "-------------------------"
 
 # Build the application using the patched setup.py
 echo "Building the app..."
 python setup.py py2app
 
-# --- FINAL FIX: Clean Extended Attributes ---
-# This is the most important step. It removes metadata that prevents the app from being signed correctly.
-echo "Cleaning the app bundle for code signing..."
-xattr -cr dist/MagicClone.app
-# --- End of Final Fix ---
-
-# Check if the build was successful and handle the final app
+# --- DIAGNOSTIC STEP ---
+# This section will help us identify the root cause of the launch error.
 if [ -d "dist/MagicClone.app" ]; then
+    echo "-------------------------------------------------------------"
+    echo "BUILD PAUSED FOR DIAGNOSTICS"
+    echo "The app has been built but not yet signed or moved."
+    echo "Please open a NEW terminal window, navigate to this directory:"
+    echo "cd \"$(pwd)\""
+    echo "Then run the following command and paste the entire output back to me:"
+    echo
+    echo "xattr -lr dist/MagicClone.app"
+    echo
+    read -p "After you have copied the output, press Enter here to continue..."
+    # --- End of Diagnostic Step ---
+
+    # --- FINAL FIX: Clean Extended Attributes ---
+    echo "Cleaning the app bundle for code signing..."
+    xattr -cr dist/MagicClone.app
+    # --- End of Final Fix ---
+
     echo "Build successful!"
-    # Remove any old version from the Applications folder
     rm -rf /Applications/MagicClone.app
-    # Copy the new version
     cp -R dist/MagicClone.app /Applications/
     echo "App built and copied to /Applications/MagicClone.app"
     echo "Launching the app..."
@@ -76,8 +88,9 @@ else
     echo "Build failed. Check for errors above."
 fi
 
-echo "Setup complete! The app is now in your Applications folder. Double-click to run it anytime."
-echo "Grant Accessibility permissions when prompted in System Settings > Privacy & Security > Accessibility."
+echo "Setup complete!"
+echo "If the app launched, grant Accessibility permissions when prompted."
+echo "If it failed again, please provide the output from the diagnostic step."
 
 # Exit the virtual environment
 deactivate
