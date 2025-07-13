@@ -58,25 +58,17 @@ echo "-------------------------"
 echo "Building the app..."
 python setup.py py2app
 
-# --- DIAGNOSTIC STEP ---
-# This section will help us identify the root cause of the launch error.
+# --- FINAL FIX & VERIFICATION ---
+# This section ensures the app bundle is clean before the final steps.
 if [ -d "dist/MagicClone.app" ]; then
-    echo "-------------------------------------------------------------"
-    echo "BUILD PAUSED FOR DIAGNOSTICS"
-    echo "The app has been built but not yet signed or moved."
-    echo "Please open a NEW terminal window, navigate to this directory:"
-    echo "cd \"$(pwd)\""
-    echo "Then run the following command and paste the entire output back to me:"
-    echo
-    echo "xattr -lr dist/MagicClone.app"
-    echo
-    read -p "After you have copied the output, press Enter here to continue..."
-    # --- End of Diagnostic Step ---
-
-    # --- FINAL FIX: Clean Extended Attributes ---
     echo "Cleaning the app bundle for code signing..."
     xattr -cr dist/MagicClone.app
-    # --- End of Final Fix ---
+    
+    echo "Verifying that the bundle is clean..."
+    # This command should now produce NO output. If it does, the problem persists.
+    xattr -lr dist/MagicClone.app
+    echo "Verification complete. If no file paths were listed above, the app is clean."
+    # --- End of Fix ---
 
     echo "Build successful!"
     rm -rf /Applications/MagicClone.app
@@ -90,7 +82,6 @@ fi
 
 echo "Setup complete!"
 echo "If the app launched, grant Accessibility permissions when prompted."
-echo "If it failed again, please provide the output from the diagnostic step."
 
 # Exit the virtual environment
 deactivate
