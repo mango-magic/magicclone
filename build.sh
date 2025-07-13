@@ -17,22 +17,13 @@ fi
 echo "Updating Homebrew..."
 brew update
 
-# Check Python version (targeting 3.11 for py2app compatibility)
-REQUIRED_PYTHON="3.11"
-if command_exists python3; then
-    PYTHON_VERSION=$(python3 --version 2>&1 | awk '{print $2}')
-    if [[ "$(echo -e "$PYTHON_VERSION\n$REQUIRED_PYTHON" | sort -V | head -n1)" != "$REQUIRED_PYTHON" ]]; then
-        echo "Python version $PYTHON_VERSION is not 3.11 or newer. Installing Python 3.11..."
-        brew install python@3.11
-    else
-        echo "Python $PYTHON_VERSION is sufficient."
-    fi
-else
-    echo "Python not found. Installing Python 3.11..."
+# Install Python 3.11 if not present (py2app compatible; may prompt for password)
+if ! command_exists python3.11; then
+    echo "Python 3.11 not found. Installing via Homebrew..."
     brew install python@3.11
 fi
 
-# Ensure python3.11 is used (Homebrew's version)
+# Use Homebrew's Python 3.11
 PYTHON_BIN="/opt/homebrew/bin/python3.11"
 
 # Create venv if not exists (avoids global pip issues)
@@ -60,4 +51,5 @@ fi
 echo "Setup complete! The app is now in your Applications folder. Double-click to run it anytime."
 echo "Grant Accessibility permissions when prompted in System Settings > Privacy & Security > Accessibility."
 
-deactivate  # Exit venv
+# Exit venv
+deactivate
