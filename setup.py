@@ -4,7 +4,7 @@ APP = ['workflow_tracker.py']  # Use the filename of your main script
 DATA_FILES = []
 OPTIONS = {
     'argv_emulation': True,
-    'packages': ['rumps', 'pynput', 'pyobjc', 'requests'],
+    'packages': ['rumps', 'pynput', 'requests'],
     'includes': ['AppKit', 'Foundation'],  # Added Foundation if needed
     'plist': {
         'CFBundleDisplayName': 'Workflow Tracker',
