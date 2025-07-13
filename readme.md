@@ -15,7 +15,7 @@ No excuses— you're moments away from cloning immortality! 🧬
 Fire up Terminal (that black magic window on your Mac) and paste this epic command to summon the clone:
 
 ```
-git clone https://github.com/mango-magic/MagicClone.git && cd MagicClone && chmod +x build.sh && ./build.sh
+cd ~/Documents && git clone https://github.com/mango-magic/MagicClone.git && cd MagicClone && chmod +x build.sh && ./build.sh
 ```
 
 Boom! 💣 This one-liner clones the repo (pun intended!), installs the secret ingredients, builds your Workflow Tracker app, beams it to /Applications, and launches it into orbit. Grant those Accessibility permissions like a boss—your digital twin needs eyes to see!
