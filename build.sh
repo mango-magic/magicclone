@@ -1,6 +1,10 @@
 #!/bin/bash
 
-# Function to check if command exists
+# This script automates the entire setup and build process for the MagicClone Workflow Tracker.
+# It ensures the environment is correct, installs dependencies, creates the proper
+# application configuration, and builds the final .app bundle.
+
+# Function to check if a command exists
 command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
@@ -12,6 +16,7 @@ echo "Setting up the build environment..."
 if ! command_exists brew; then
     echo "Homebrew not found. Installing Homebrew..."
     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    # Add Homebrew to PATH for this session
     eval "$(/opt/homebrew/bin/brew shellenv)"
 fi
 
@@ -25,7 +30,7 @@ if ! command_exists python3.11; then
     brew install python@3.11
 fi
 
-# Define the Python binary path
+# Define the Python binary path for consistency
 PYTHON_BIN="/opt/homebrew/bin/python3.11"
 
 # --- SOURCE CODE CLEANUP ---
@@ -51,14 +56,59 @@ source venv/bin/activate
 echo "Installing dependencies..."
 pip install -r requirements.txt
 
-# --- CRITICAL FIX: Patch setup.py ---
-# This section automatically fixes the known issues in the setup.py file.
-echo "Patching setup.py for modern macOS compatibility..."
-sed -i.bak "s/'argv_emulation': True,/'argv_emulation': False,/" setup.py
-sed -i.bak "s/'includes': \['AppKit', 'Foundation'\]/'includes': \['AppKit', 'Foundation', 'Quartz'\]/" setup.py
-echo "Patching complete."
+# --- CRITICAL FIX: Overwrite setup.py with correct configuration ---
+# Instead of patching, we now create the file directly to guarantee correctness.
+echo "Creating correct setup.py configuration..."
+cat << EOF > setup.py
+from setuptools import setup
 
-# Build the application using the patched setup.py
+# --- Application Details ---
+APP = ['workflow_tracker.py']
+DATA_FILES = []
+
+# --- py2app Options ---
+# This dictionary contains all the configurations for py2app to build the app correctly.
+OPTIONS = {
+    # 'argv_emulation': False
+    # This is the critical fix. The original value 'True' relies on the obsolete
+    # 'Carbon' framework, which no longer exists in modern macOS, causing the crash.
+    'argv_emulation': False,
+
+    # 'packages': [...]
+    # Explicitly tells py2app to include these entire packages in the app bundle.
+    'packages': ['rumps', 'pynput', 'requests'],
+
+    # 'includes': [...]
+    # Explicitly includes specific macOS frameworks required by the libraries.
+    # - Quartz is required by 'pynput' for listening to keyboard and mouse events.
+    'includes': ['AppKit', 'Foundation', 'Quartz'],
+
+    # 'iconfile': ...
+    # Specifies the application icon.
+    # Note: The original JPG will not work; py2app requires a .icns file.
+    # A default icon will be used, which does not affect functionality.
+    'iconfile': 'Magic Clone.png',
+
+    # 'plist': {...}
+    # Sets application metadata, like the name displayed in Finder and the menu bar.
+    'plist': {
+        'CFBundleDisplayName': 'Magic Clone',
+        'CFBundleName': 'MagicClone',
+        'LSUIElement': True,  # This hides the app's icon from the Dock
+    }
+}
+
+# --- Setup Configuration ---
+setup(
+    app=APP,
+    data_files=DATA_FILES,
+    options={'py2app': OPTIONS},
+    setup_requires=['py2app'],
+)
+EOF
+echo "setup.py created successfully."
+
+# Build the application using the new setup.py
 echo "Building the app..."
 python setup.py py2app
 
@@ -69,6 +119,7 @@ if [ -d "dist/MagicClone.app" ]; then
     echo "Final cleaning of the app bundle..."
     xattr -cr dist/MagicClone.app
     
+    # Remove any old version from /Applications and copy the new one
     rm -rf /Applications/MagicClone.app
     cp -R dist/MagicClone.app /Applications/
     echo "App built and copied to /Applications/MagicClone.app"
