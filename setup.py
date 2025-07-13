@@ -5,7 +5,7 @@ DATA_FILES = []
 OPTIONS = {
     'argv_emulation': True,
     'packages': ['rumps', 'pynput', 'requests'],
-    'includes': ['AppKit', 'Foundation'],  # Added Foundation if needed
+    'includes': ['AppKit', 'Foundation', 'Quartz'],  # Added Foundation if needed
     'iconfile': 'Magic Clone.png',  # Path to the PNG icon in the repo root; py2app converts to .icns
     'plist': {
         'CFBundleDisplayName': 'Magic Clone',
