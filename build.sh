@@ -37,7 +37,7 @@ pip install -r requirements.txt
 
 # Build the app
 echo "Building the app..."
-$PYTHON_BIN setup.py py2app
+python setup.py py2app
 
 if [ -d "dist/MagicClone.app" ]; then
     cp -R dist/MagicClone.app /Applications/
