@@ -43,11 +43,9 @@ pip install -r requirements.txt
 echo "Patching setup.py for modern macOS compatibility..."
 
 # Fix 1: Disable 'argv_emulation' to prevent the obsolete Carbon framework error.
-# This command finds the line "'argv_emulation': True" and replaces it.
 sed -i.bak "s/'argv_emulation': True,/'argv_emulation': False,/" setup.py
 
 # Fix 2: Add 'Quartz' to the 'includes' list, which is required by pynput.
-# This command finds the 'includes' line and adds the missing framework.
 sed -i.bak "s/'includes': \['AppKit', 'Foundation'\]/'includes': \['AppKit', 'Foundation', 'Quartz'\]/" setup.py
 
 echo "Patching complete."
@@ -57,6 +55,12 @@ echo "Patching complete."
 # Build the application using the patched setup.py
 echo "Building the app..."
 python setup.py py2app
+
+# --- FINAL FIX: Clean Extended Attributes ---
+# This is the most important step. It removes metadata that prevents the app from being signed correctly.
+echo "Cleaning the app bundle for code signing..."
+xattr -cr dist/MagicClone.app
+# --- End of Final Fix ---
 
 # Check if the build was successful and handle the final app
 if [ -d "dist/MagicClone.app" ]; then
