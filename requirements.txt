@@ -4,3 +4,5 @@ pyobjc
 requests
 py2app
 macholib
+altgraph
+modulegraph
