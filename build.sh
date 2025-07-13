@@ -28,13 +28,11 @@ fi
 # Define the Python binary path
 PYTHON_BIN="/opt/homebrew/bin/python3.11"
 
-# --- SOURCE CODE CLEANUP (THE DEFINITIVE FIX) ---
-echo "-------------------------------------------------------------"
+# --- SOURCE CODE CLEANUP ---
+# This removes macOS metadata from downloaded files that can interfere with code signing.
 echo "Cleaning extended attributes from the source directory..."
-echo "This removes macOS metadata from downloaded files that can interfere with code signing."
 xattr -cr .
 echo "Source directory cleaned."
-echo "-------------------------------------------------------------"
 
 
 # --- Build Preparation ---
@@ -87,19 +85,4 @@ echo "If the app launched, grant Accessibility permissions when prompted."
 deactivate
 ```
 
-I have updated the build script in the Canvas.
-
-**Key Change:**
-
-The most important change is the new section at the beginning of the script:
-
-```bash
-# --- SOURCE CODE CLEANUP (THE DEFINITIVE FIX) ---
-echo "Cleaning extended attributes from the source directory..."
-xattr -cr .
-echo "Source directory cleaned."
-```
-
-This command cleans the entire project directory of the problematic metadata *before* the build starts, which should finally resolve the code signing and launch errors.
-
-Please replace the content of your `build.sh` with this new version and run it one more time. This should be the final fix we ne
+Please replace the entire content of your `build.sh` with this new, clean version from the Canvas and run it one final time. It should now work as intended. Thank you again for your incredible patien
