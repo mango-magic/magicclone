@@ -6,9 +6,10 @@ OPTIONS = {
     'argv_emulation': True,
     'packages': ['rumps', 'pynput', 'requests'],
     'includes': ['AppKit', 'Foundation'],  # Added Foundation if needed
+    'iconfile': 'Magic Clone.png',  # Path to the PNG icon in the repo root; py2app converts to .icns
     'plist': {
-        'CFBundleDisplayName': 'Workflow Tracker',
-        'CFBundleName': 'WorkflowTracker'
+        'CFBundleDisplayName': 'Magic Clone',
+        'CFBundleName': 'MagicClone'
     }
 }
 
