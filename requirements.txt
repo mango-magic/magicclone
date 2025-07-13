@@ -6,3 +6,4 @@ py2app
 macholib
 altgraph
 modulegraph
+setuptools<81
