@@ -79,9 +79,11 @@ OPTIONS = {
     'packages': ['rumps', 'pynput', 'requests'],
 
     # 'includes': [...]
-    # Explicitly includes specific macOS frameworks required by the libraries.
+    # Explicitly includes specific macOS frameworks and Python modules.
     # - Quartz is required by 'pynput' for listening to keyboard and mouse events.
-    'includes': ['AppKit', 'Foundation', 'Quartz'],
+    # - 'imp' is a deprecated module required by this version of pyobjc, but is not
+    #   found automatically by py2app. Including it resolves the ModuleNotFoundError.
+    'includes': ['AppKit', 'Foundation', 'Quartz', 'imp'],
 
     # 'iconfile': ...
     # Specifies the application icon.
