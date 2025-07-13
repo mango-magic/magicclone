@@ -3,3 +3,4 @@ pynput
 pyobjc
 requests
 py2app
+macholib
