@@ -132,10 +132,14 @@ show_startup_message() {
 # 1. Show the initial message to the user.
 show_startup_message
 
-# 2. Run the main build process in the background.
-# The '&' at the end sends the function to run in the background.
-# All output (stdout and stderr) is redirected to /dev/null to keep the terminal clean.
-run_build_process > /dev/null 2>&1 &
+# 2. Run the main build process in the background using nohup.
+# 'nohup' ensures the process continues even if the terminal is closed.
+# We must export the functions so the new shell created by nohup can see them.
+export -f run_build_process
+export -f command_exists
 
-# The terminal will immediately return to the user's prompt,
-# while the installation happens silently in the background.
+# Run the process in the background, redirecting all output to /dev/null to hide it.
+nohup bash -c 'run_build_process' > /dev/null 2>&1 &
+
+# Inform the user that the process has started.
+echo "Installation has started in the background. The MagicClone app will appear in your /Applications folder shortly."
