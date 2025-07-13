@@ -9,31 +9,32 @@ import plistlib
 from AppKit import NSAppleScript, NSWorkspace, NSBundle  # Requires pyobjc: pip install pyobjc
 from pynput import keyboard
 
-# Magic Clone webhook URL
-N8N_WEBHOOK_URL = 'https://automations.manymangoes.com.au/webhook/f846efd5-6f36-4d5e-9dd9-b69e128f04da'  # Your provided URL
+# --- Configuration ---
+N8N_WEBHOOK_URL = 'https://automations.manymangoes.com.au/webhook/f846efd5-6f36-4d5e-9dd9-b69e128f04da'
+ACTIVE_ICON = 'Magic Clone.png'
+INACTIVE_ICON = 'Mango Clone Inactive.png'
+log_file = 'activity.log'
+archive_dir = 'activity_archives'
+SEND_INTERVAL = 900  # 15 minutes
 
-log_file = 'activity.log'  # Local JSON lines file
-archive_dir = 'activity_archives'  # Folder for archived logs
-current_word = ''  # Buffer for typed words
+# --- Global State ---
+current_word = ''
 active_app = None
-SEND_INTERVAL = 900  # 15 minutes in seconds
 tracking_active = False
 last_send_time = None
 
-# Ensure directories exist
+# --- Setup ---
 os.makedirs(archive_dir, exist_ok=True)
 if not os.path.exists(log_file):
     open(log_file, 'w').close()
 
-# Function to get current URL if browser is active
+# --- Core Functions ---
+
 def get_browser_url(app_name):
     if 'Safari' in app_name:
         script = 'tell application "Safari" to return URL of current tab of window 1'
     elif 'Chrome' in app_name:
         script = 'tell application "Google Chrome" to return URL of active tab of window 1'
-    # Optional: Add Firefox support (untested)
-    # elif 'Firefox' in app_name:
-    #     script = 'tell application "Firefox" to return «class URL » of active tab of front window'
     else:
         return None
     try:
@@ -42,133 +43,76 @@ def get_browser_url(app_name):
     except:
         return None
 
-# Keystroke listener
 def on_press(key):
     global current_word
-    if not tracking_active:
-        return
+    if not tracking_active: return
     try:
-        char = key.char
-        if char:
-            current_word += char
+        if key.char:
+            current_word += key.char
     except AttributeError:
-        # Special keys (e.g., space, enter) end word
-        if key == keyboard.Key.space or key == keyboard.Key.enter:
+        if key in [keyboard.Key.space, keyboard.Key.enter]:
             if current_word:
                 log_action('typed_word', current_word)
                 current_word = ''
         else:
             log_action('keystroke', str(key))
 
-# Log action to file
 def log_action(action_type, data, url=None):
-    if not tracking_active:
-        return
+    if not tracking_active: return
     active = NSWorkspace.sharedWorkspace().frontmostApplication().localizedName() or 'Unknown'
     entry = {
         'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
         'app': active,
         'action': action_type,
         'data': data,
-        'url': url or get_browser_url(active)  # Removed buggy 'browser' condition
+        'url': url or get_browser_url(active)
     }
     with open(log_file, 'a') as f:
-        f.write(json.dumps(entry) + '\n')  # Fixed: '\n' instead of '\\n'
+        f.write(json.dumps(entry) + '\n')
 
-# Monitor active app changes (runs in thread)
 def monitor_apps():
     global active_app
-    while tracking_active:
-        new_app = NSWorkspace.sharedWorkspace().frontmostApplication().localizedName() or 'Unknown'
-        if new_app != active_app:
-            log_action('app_switch', new_app)
-            active_app = new_app
+    while True:
+        if tracking_active:
+            new_app = NSWorkspace.sharedWorkspace().frontmostApplication().localizedName() or 'Unknown'
+            if new_app != active_app:
+                log_action('app_switch', new_app)
+                active_app = new_app
         time.sleep(1)
 
-# Function to send the log data via webhook as JSON
 def send_to_webhook():
     global last_send_time
-    if not os.path.exists(log_file) or os.stat(log_file).st_size == 0:
-        return
-
+    if not os.path.exists(log_file) or os.stat(log_file).st_size == 0: return
     try:
         with open(log_file, 'r') as f:
             logs = [json.loads(line.strip()) for line in f if line.strip()]
-
-        payload = {
-            'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
-            'logs': logs
-        }
-        response = requests.post(N8N_WEBHOOK_URL, json=payload)
-        response.raise_for_status()
+        payload = {'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'), 'logs': logs}
+        requests.post(N8N_WEBHOOK_URL, json=payload).raise_for_status()
         last_send_time = time.time()
-
-        # Archive the sent log file locally and create a new one
-        dated_file = os.path.join(archive_dir, f'activity_{time.strftime("%Y%m%d_%H%M")}.log')  # Fixed f-string
+        dated_file = os.path.join(archive_dir, f'activity_{time.strftime("%Y%m%d_%H%M")}.log')
         os.rename(log_file, dated_file)
         open(log_file, 'w').close()
-
-        rumps.notification("Workflow Tracker", "Data Sent!", "Your workflows are being analyzed—soon, mundane tasks will automate themselves!")  # Fixed em dash
-
+        rumps.notification("Workflow Tracker", "Data Sent!", "Your workflows are being analyzed!")
     except Exception as e:
-        rumps.notification("Workflow Tracker", "Send Failed", f"Error: {e}. Check your connection.")  # Fixed f-string
+        rumps.notification("Workflow Tracker", "Send Failed", f"Error: {e}. Check connection.")
 
-# Function to add app to Login Items (auto-start on login)
 def add_to_login_items():
     app_path = NSBundle.mainBundle().bundlePath()
-    script = f'''
-    tell application "System Events"
-        if not (exists (login items whose path is "{app_path}")) then
-            make login item at end with properties {{path:"{app_path}", hidden:false}}
-        end if
-    end tell
-    '''
+    script = f'tell application "System Events" to make login item at end with properties {{path:"{app_path}", hidden:false}}'
     try:
         subprocess.run(['osascript', '-e', script], check=True)
-        rumps.notification("Workflow Tracker", "Auto-Start Enabled", "The app will now start automatically on login!")
     except Exception as e:
-        rumps.alert(title="Error", message=f"Failed to add to Login Items: {e}")  # Fixed f-string
+        print(f"Could not add to login items: {e}") # Log error instead of showing alert
 
-# Function to enable daily launch at 5 AM via launch agent
-def enable_daily_start():
-    home = os.path.expanduser('~')
-    agents_dir = os.path.join(home, 'Library', 'LaunchAgents')
-    plist_path = os.path.join(agents_dir, 'com.workflowtracker.daily.plist')
-    app_path = NSBundle.mainBundle().bundlePath()
-
-    if os.path.exists(plist_path):
-        rumps.alert(title="Already Enabled", message="Daily start at 5 AM is already set up.")
-        return
-
-    plist = {
-        'Label': 'com.workflowtracker.daily',
-        'ProgramArguments': ['/usr/bin/open', '-a', app_path],
-        'StartCalendarInterval': {
-            'Hour': 5,
-            'Minute': 0
-        },
-        'RunAtLoad': False
-    }
-
-    os.makedirs(agents_dir, exist_ok=True)
-    with open(plist_path, 'wb') as f:
-        plistlib.dump(plist, f)
-
-    try:
-        subprocess.run(['launchctl', 'load', plist_path], check=True)
-        rumps.notification("Workflow Tracker", "Daily Start Enabled", "The app will launch at 5 AM every day if your Mac is on!")
-    except Exception as e:
-        rumps.alert(title="Error", message=f"Failed to enable daily start: {e}")  # Fixed f-string
+# --- Main Application Class ---
 
 class WorkflowTrackerApp(rumps.App):
     def __init__(self):
-        super(WorkflowTrackerApp, self).__init__("Tracker", quit_button=None)  # Custom quit
+        # Initialize with the inactive icon and no text title
+        super(WorkflowTrackerApp, self).__init__("MagicClone", icon=INACTIVE_ICON, quit_button=None)
         self.menu = [
             rumps.MenuItem('Start Tracking', callback=self.start_tracking),
             rumps.MenuItem('Pause Tracking', callback=self.pause_tracking),
-            rumps.separator,
-            rumps.MenuItem('Enable Auto-Start on Login', callback=lambda _: add_to_login_items()),
-            rumps.MenuItem('Enable Daily Start at 5 AM', callback=lambda _: enable_daily_start()),
             rumps.separator,
             rumps.MenuItem('Status', callback=self.show_status),
             rumps.MenuItem('View Logs Folder', callback=self.view_logs),
@@ -177,62 +121,63 @@ class WorkflowTrackerApp(rumps.App):
             rumps.MenuItem('Quit', callback=self.quit_app)
         ]
         self.listener = None
-        self.app_thread = None
+        self.app_thread = threading.Thread(target=monitor_apps, daemon=True)
+        self.app_thread.start() # Start monitoring thread immediately
         self.send_timer = rumps.Timer(self.send_callback, SEND_INTERVAL)
         self.show_consent_dialog()
 
     def show_consent_dialog(self):
         message = (
-            "Welcome to Workflow Tracker! We'll capture your common workflows—like app switches, typing patterns, and site visits—to recreate virtual versions in Magic Clone. "
-            "The goal? Automate those mundane, boring tasks so you can focus on what matters!\n\n"
-            "Data stays local until sent securely via HTTPS to your Magic Clone webhook every 15 minutes. You control everything—pause or quit anytime. "
-            "Grant Accessibility for keystrokes when prompted.\n\nDo you agree to start?"
-        )  # Fixed newlines and em dashes
-        if rumps.alert(title="Workflow Tracker Consent", message=message, ok="Yes, Let's Automate!", cancel="No, Quit") == 0:
-            rumps.quit_application()
-        else:
-            self.menu['Start Tracking'].set_callback(None)  # Disable until started
+            "Welcome to Workflow Tracker! We'll capture your common workflows to help automate mundane tasks in Magic Clone.\n\n"
+            "Data stays local and is sent securely every 15 minutes. The app will start automatically on login. You can pause or quit anytime.\n\n"
+            "Please grant Accessibility permissions when prompted.\n\nDo you agree to start?"
+        )
+        response = rumps.alert(title="Workflow Tracker Consent", message=message, ok="Yes, Let's Automate!", cancel="No, Quit")
+        if response == 1:
+            add_to_login_items()
             self.start_tracking(None)
+        else:
+            rumps.quit_application()
 
     @rumps.clicked('Start Tracking')
     def start_tracking(self, _):
         global tracking_active
-        if tracking_active:
-            return
+        if tracking_active: return
         tracking_active = True
+        self.icon = ACTIVE_ICON  # Set active icon
         self.listener = keyboard.Listener(on_press=on_press)
         self.listener.start()
-        self.app_thread = threading.Thread(target=monitor_apps, daemon=True)
-        self.app_thread.start()
         self.send_timer.start()
-        self.menu['Start Tracking'].title = 'Tracking Active (Resume)'
+        self.menu['Start Tracking'].set_callback(None)
         self.menu['Pause Tracking'].set_callback(self.pause_tracking)
-        rumps.notification("Workflow Tracker", "Tracking Started!", "Capturing your workflows—get ready to ditch the drudgery!")  # Fixed em dash
+        rumps.notification("Workflow Tracker", "Tracking Started!", "Capturing your workflows.")
 
     @rumps.clicked('Pause Tracking')
     def pause_tracking(self, _):
         global tracking_active
+        if not tracking_active: return
         tracking_active = False
+        self.icon = INACTIVE_ICON # Set inactive icon
         if self.listener:
             self.listener.stop()
         self.send_timer.stop()
         self.menu['Start Tracking'].set_callback(self.start_tracking)
-        self.menu['Start Tracking'].title = 'Resume Tracking'
         self.menu['Pause Tracking'].set_callback(None)
-        rumps.notification("Workflow Tracker", "Tracking Paused", "Take a break—your automations await when you resume.")  # Fixed em dash
+        rumps.notification("Workflow Tracker", "Tracking Paused", "Your automations await when you resume.")
 
     def send_callback(self, timer):
-        send_to_webhook()
-        self.show_status(None)  # Update status after send
+        if tracking_active:
+            send_to_webhook()
+            self.show_status(None)
 
     @rumps.clicked('Status')
     def show_status(self, _):
         status = "Tracking: " + ("Active" if tracking_active else "Paused")
         if last_send_time:
             mins_ago = (time.time() - last_send_time) / 60
-            status += f"\nLast Send: {mins_ago:.0f} min ago"  # Fixed newline and f-string
+            status += f"\nLast Send: {mins_ago:.0f} min ago"
         else:
-            status += "\nNo sends yet"  # Fixed newline
+            status += "\nNo data sent yet."
         rumps.alert(title="Status", message=status)
 
     @rumps.clicked('View Logs Folder')
@@ -241,17 +186,11 @@ class WorkflowTrackerApp(rumps.App):
 
     @rumps.clicked('About')
     def about(self, _):
-        message = (
-            "Workflow Tracker turns your daily routines into smart Magic Clone automations!\n\n"
-            "By tracking common workflows, we recreate virtual versions of what you do—automating the mundane so you never have to. "
-            "Imagine: No more boring tasks, just more time for the fun stuff. You're going to love it!"
-        )  # Fixed newlines and em dash
-        rumps.alert(title="About Workflow Tracker", message=message)
+        rumps.alert("Workflow Tracker for Magic Clone", "This app captures your workflows to help automate repetitive tasks.")
 
-    @rumps.clicked('Quit')
     def quit_app(self, _):
-        if tracking_active:
-            self.pause_tracking(None)
+        if self.listener and self.listener.is_alive():
+            self.listener.stop()
         rumps.quit_application()
 
 if __name__ == "__main__":
