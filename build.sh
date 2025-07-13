@@ -83,8 +83,3 @@ echo "If the app launched, grant Accessibility permissions when prompted."
 
 # Exit the virtual environment
 deactivate
-```
-
-I've updated the script in the Canvas. You can now run the command from a fresh clone of the repository one last time, and it will execute without any errors.
-
-Thank you for your incredible patience and for working through this with me. We've successfully navigated the complexities of macOS app distributi
