@@ -12,7 +12,7 @@ from PIL import Image
 
 # Import Apple-specific frameworks for native OCR
 from AppKit import NSBitmapImageRep, NSImage
-from CoreGraphics import CGImageCreateWithImageInRect, CGMainDisplayID, CGDisplayCreateImage
+from Quartz import CGImageCreateWithImageInRect, CGMainDisplayID, CGDisplayCreateImage
 from Vision import VNRecognizeTextRequest, VNImageRequestHandler
 
 # --- Configuration ---
