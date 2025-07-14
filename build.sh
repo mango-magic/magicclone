@@ -29,6 +29,7 @@ if ! command_exists python3.11; then
 fi
 
 PYTHON_BIN="/opt/homebrew/bin/python3.11"
+PYTHON_FRAMEWORK="/opt/homebrew/opt/python@3.11/Frameworks/Python.framework"
 
 # --- Build Preparation ---
 echo "Preparing a clean build environment..."
@@ -53,6 +54,9 @@ OPTIONS = {
     'argv_emulation': False,
     'packages': ['rumps', 'pynput', 'requests'],
     'includes': ['AppKit', 'Foundation', 'Quartz', 'imp'],
+    # CRITICAL FIX: Explicitly provide the path to the Python framework
+    # This resolves the "Python runtime not could be located" error.
+    'frameworks': ['$PYTHON_FRAMEWORK'],
     'plist': {
         'LSUIElement': True,
     }
@@ -73,9 +77,11 @@ echo "Building the app..."
 ./venv/bin/python setup.py py2app
 
 # --- Final Check and Launch ---
-if [ -d "dist/MagicClone.app" ]; then
+if [ -d "dist/workflow_tracker.app" ]; then
     echo "Build successful!"
     rm -rf /Applications/MagicClone.app
+    # Rename the app to MagicClone.app before copying
+    mv dist/workflow_tracker.app dist/MagicClone.app
     cp -R dist/MagicClone.app /Applications/
     echo "App built and copied to /Applications/MagicClone.app"
     echo "Launching the app..."
