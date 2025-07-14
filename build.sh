@@ -26,12 +26,6 @@ run_build_process() {
         echo "Python 3.11 not found. Installing via Homebrew..."
         brew install python@3.11
     fi
-    
-    # Install Tesseract for OCR
-    if ! command_exists tesseract; then
-        echo "Tesseract OCR engine not found. Installing via Homebrew..."
-        brew install tesseract tesseract-lang
-    fi
 
     PYTHON_BIN="/opt/homebrew/bin/python3.11"
 
@@ -54,26 +48,16 @@ run_build_process() {
     echo "Creating correct setup.py configuration..."
     cat << EOF > setup.py
 from setuptools import setup
-import os
-import cv2
-import glob
-
-# --- Find and prepare OpenCV data files ---
-cv2_data_path = os.path.join(os.path.dirname(cv2.__file__), 'data')
-cv2_data_files = glob.glob(os.path.join(cv2_data_path, '*.xml'))
 
 # --- Application Details ---
 APP = ['workflow_tracker.py']
-DATA_FILES = [
-    'Magic Clone.png', 'icon_active.png', 'icon_inactive.png',
-    ('data', cv2_data_files)
-]
+DATA_FILES = ['Magic Clone.png', 'icon_active.png', 'icon_inactive.png']
 
 # --- py2app Options ---
 OPTIONS = {
     'argv_emulation': False,
-    'packages': ['rumps', 'pynput', 'requests', 'mss', 'pytesseract', 'PIL', 'cv2', 'numpy'],
-    'includes': ['AppKit', 'Foundation', 'Quartz', 'imp'],
+    'packages': ['rumps', 'pynput', 'requests', 'mss', 'PIL'],
+    'includes': ['AppKit', 'Foundation', 'Quartz', 'Vision', 'imp'],
     'iconfile': 'Magic Clone.png',
     'plist': {
         'CFBundleDisplayName': 'Mango Clone',
@@ -108,14 +92,14 @@ EOF
     else
         echo "Build failed. Check for errors above."
     fi
-    
+
     echo "Setup complete!"
     deactivate
 }
 
 # --- User Interface ---
 show_startup_message() {
-    osascript -e 'display dialog "✨ The cloning process is about to begin. We need to install a few new tools to capture screen text, so this may take a moment. By your third sip of coffee, we can get started 🪄" with title "Mango Clone Setup" buttons {"Begin Installation"} default button "Begin Installation"'
+    osascript -e 'display dialog "✨ The cloning process is about to begin. Your app is now using Apple’s native OCR for a faster, more reliable experience. By your third sip of coffee, we can get started 🪄" with title "Mango Clone Setup" buttons {"Begin Installation"} default button "Begin Installation"'
 }
 
 # --- Script Execution ---
