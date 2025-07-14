@@ -8,6 +8,7 @@ import rumps
 import uuid
 import mss
 import pytesseract
+import webbrowser
 from PIL import Image
 
 # --- Configuration ---
@@ -52,15 +53,10 @@ def capture_screen_text():
     if not tracking_active: return
     try:
         with mss.mss() as sct:
-            # Get information of monitor 1
             monitor_number = 1
             mon = sct.monitors[monitor_number]
-
-            # Grab the data
             sct_img = sct.grab(mon)
             img = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
-
-            # Use Tesseract to do OCR on the image
             text = pytesseract.image_to_string(img)
             
             if text and text.strip():
@@ -96,8 +92,6 @@ def on_press(key):
                 log_action('typed_word', current_word)
                 current_word = ''
         else:
-            # Optionally log special keys, but can be noisy.
-            # log_action('keystroke', str(key))
             pass
 
 def log_action(action_type, data, app_override=None, url_override=None):
@@ -123,7 +117,6 @@ def monitor_apps():
         if tracking_active:
             new_app = (NSWorkspace.sharedWorkspace().frontmostApplication().localizedName() or 'Unknown')
             if new_app != active_app:
-                # Log any pending word from the *previous* app before switching
                 if current_word:
                     previous_url = get_browser_url(active_app)
                     log_action('typed_word', current_word, app_override=active_app, url_override=previous_url)
@@ -167,13 +160,41 @@ def check_for_notifications(timer):
 # --- Main Application Class ---
 class WorkflowTrackerApp(rumps.App):
     def __init__(self):
-        super(WorkflowTrackerApp, self).__init__("Mango Clone", quit_button="Quit")
+        super(WorkflowTrackerApp, self).__init__("Mango Clone", quit_button=None)
         load_or_create_user_id()
         self.icon = ICON_INACTIVE
+        
+        def open_link(sender):
+            webbrowser.open(sender.url)
+
         self.menu = [
             rumps.MenuItem('Start Tracking', callback=self.start_tracking),
             rumps.MenuItem('Pause Tracking', callback=self.pause_tracking),
+            rumps.separator,
+            rumps.MenuItem('View Activity Logs', callback=self.open_log_directory),
+            rumps.separator,
+            rumps.MenuItem('My Automations', callback=open_link),
+            ('Help & Resources', [
+                rumps.MenuItem('Quickstart Guide', callback=open_link),
+                rumps.MenuItem('Documentation', callback=open_link),
+                rumps.MenuItem('Courses', callback=open_link),
+                rumps.MenuItem('Community Forum', callback=open_link),
+            ]),
+            rumps.separator,
+            rumps.MenuItem('About Mango Clone', callback=open_link),
+            rumps.MenuItem('Report a Bug', callback=open_link),
+            rumps.separator,
+            rumps.MenuItem('Quit', callback=rumps.quit_application)
         ]
+
+        self.menu['My Automations'].url = 'https://setup.manymangoes.com.au/automations'
+        self.menu['Help & Resources']['Quickstart Guide'].url = 'https://setup.manymangoes.com.au/quickstart'
+        self.menu['Help & Resources']['Documentation'].url = 'https://setup.manymangoes.com.au/docs'
+        self.menu['Help & Resources']['Courses'].url = 'https://setup.manymangoes.com.au/courses'
+        self.menu['Help & Resources']['Community Forum'].url = 'https://setup.manymangoes.com.au/forum'
+        self.menu['About Mango Clone'].url = 'https://setup.manymangoes.com.au/about'
+        self.menu['Report a Bug'].url = 'https://setup.manymangoes.com.au/report-bug'
+        
         from pynput import keyboard
         self.listener = keyboard.Listener(on_press=on_press)
         self.app_thread = threading.Thread(target=monitor_apps, daemon=True)
@@ -200,12 +221,15 @@ class WorkflowTrackerApp(rumps.App):
         tracking_active = False
         self.icon = ICON_INACTIVE
         self.listener.stop()
-        # Recreate listener for next start
         from pynput import keyboard
         self.listener = keyboard.Listener(on_press=on_press)
         self.send_timer.stop()
         self.notification_poll_timer.stop()
         self.ocr_timer.stop()
+
+    def open_log_directory(self, _):
+        log_dir_path = os.path.abspath(ARCHIVE_DIR)
+        subprocess.run(['open', log_dir_path])
 
 if __name__ == "__main__":
     WorkflowTrackerApp().run()
