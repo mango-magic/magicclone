@@ -231,6 +231,7 @@ class WorkflowTrackerApp(rumps.App):
         self.listener = keyboard.Listener(on_press=on_press)
         self.listener.start()
         
+        send_to_webhook(None)  # <-- ADD THIS LINE
         self.send_timer.start()
         self.notification_poll_timer.start()
         self.ocr_timer.start()
