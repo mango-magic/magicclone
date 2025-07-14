@@ -55,7 +55,6 @@ run_build_process() {
     source venv/bin/activate
 
     # Install required Python packages
-    echo "Installing dependencies..."
     pip install -r requirements.txt
 
     # --- CRITICAL FIX: Overwrite setup.py with correct configuration ---
@@ -66,7 +65,7 @@ from setuptools import setup
 
 # --- Application Details ---
 APP = ['workflow_tracker.py']
-DATA_FILES = ['icon_active.png', 'icon_inactive.png']
+DATA_FILES = ['Magic Clone.png', 'icon_active.png', 'icon_inactive.png']
 
 # --- py2app Options ---
 # This dictionary contains all the configurations for py2app to build the app correctly.
@@ -74,7 +73,7 @@ OPTIONS = {
     'argv_emulation': False,
     'packages': ['rumps', 'pynput', 'requests'],
     'includes': ['AppKit', 'Foundation', 'Quartz', 'imp'],
-    'iconfile': 'icon_inactive.png',
+    'iconfile': 'Magic Clone.png',
     'plist': {
         'CFBundleDisplayName': 'Mango Clone',
         'CFBundleName': 'MangoClone',
