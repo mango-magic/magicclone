@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This script provides a user-friendly installer for the MagicClone Workflow Tracker.
+# This script provides a user-friendly installer for the Mango Clone Workflow Tracker.
 # It displays a pop-up message and then runs the entire build process silently in the background.
 
 # --- Main Build Logic ---
@@ -66,39 +66,19 @@ from setuptools import setup
 
 # --- Application Details ---
 APP = ['workflow_tracker.py']
-DATA_FILES = []
+DATA_FILES = ['icon_active.png', 'icon_inactive.png']
 
 # --- py2app Options ---
 # This dictionary contains all the configurations for py2app to build the app correctly.
 OPTIONS = {
-    # 'argv_emulation': False
-    # This is the critical fix. The original value 'True' relies on the obsolete
-    # 'Carbon' framework, which no longer exists in modern macOS, causing the crash.
     'argv_emulation': False,
-
-    # 'packages': [...]
-    # Explicitly tells py2app to include these entire packages in the app bundle.
     'packages': ['rumps', 'pynput', 'requests'],
-
-    # 'includes': [...]
-    # Explicitly includes specific macOS frameworks and Python modules.
-    # - Quartz is required by 'pynput' for listening to keyboard and mouse events.
-    # - 'imp' is a deprecated module required by this version of pyobjc, but is not
-    #   found automatically by py2app. Including it resolves the ModuleNotFoundError.
     'includes': ['AppKit', 'Foundation', 'Quartz', 'imp'],
-
-    # 'iconfile': ...
-    # Specifies the application icon.
-    # Note: The original JPG will not work; py2app requires a .icns file.
-    # A default icon will be used, which does not affect functionality.
-    'iconfile': 'Magic Clone.png',
-
-    # 'plist': {...}
-    # Sets application metadata, like the name displayed in Finder and the menu bar.
+    'iconfile': 'icon_inactive.png',
     'plist': {
-        'CFBundleDisplayName': 'Magic Clone',
-        'CFBundleName': 'MagicClone',
-        'LSUIElement': True,  # This hides the app's icon from the Dock
+        'CFBundleDisplayName': 'Mango Clone',
+        'CFBundleName': 'MangoClone',
+        'LSUIElement': True,
     }
 }
 
@@ -117,18 +97,18 @@ EOF
     python setup.py py2app
 
     # --- Final Check and Launch ---
-    if [ -d "dist/MagicClone.app" ]; then
+    if [ -d "dist/MangoClone.app" ]; then
         echo "Build successful!"
         # The xattr -cr command is run again on the final bundle as a safeguard.
         echo "Final cleaning of the app bundle..."
-        xattr -cr dist/MagicClone.app
+        xattr -cr dist/MangoClone.app
         
         # Remove any old version from /Applications and copy the new one
-        rm -rf /Applications/MagicClone.app
-        cp -R dist/MagicClone.app /Applications/
-        echo "App built and copied to /Applications/MagicClone.app"
+        rm -rf /Applications/MangoClone.app
+        cp -R dist/MangoClone.app /Applications/
+        echo "App built and copied to /Applications/MangoClone.app"
         echo "Launching the app..."
-        open /Applications/MagicClone.app
+        open /Applications/MangoClone.app
     else
         echo "Build failed. Check for errors above."
     fi
@@ -143,7 +123,7 @@ EOF
 # --- User Interface ---
 # Displays a friendly pop-up message to the user using AppleScript.
 show_startup_message() {
-    osascript -e 'display dialog "✨ The cloning process is about to begin.  By your third sip of coffee, we can get started 🪄" with title "MagicClone Setup" buttons {"Begin Installation"} default button "Begin Installation"'
+    osascript -e 'display dialog "✨ The cloning process is about to begin. By your third sip of coffee, we can get started 🪄" with title "Mango Clone Setup" buttons {"Begin Installation"} default button "Begin Installation"'
 }
 
 # --- Script Execution ---
