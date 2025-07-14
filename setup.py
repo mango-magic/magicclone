@@ -2,8 +2,8 @@ from setuptools import setup
 
 # --- Application Details ---
 APP = ['workflow_tracker.py']
-# Include the icon files in the application bundle
-DATA_FILES = ['icon_active.png', 'icon_inactive.png']
+# Include all icon files in the application bundle
+DATA_FILES = ['Magic Clone.png', 'icon_active.png', 'icon_inactive.png']
 
 # --- py2app Options ---
 # This dictionary contains all the configurations for py2app to build the app correctly.
@@ -13,7 +13,7 @@ OPTIONS = {
     'includes': ['AppKit', 'Foundation', 'Quartz', 'imp'],
     
     # Set the main application icon (this is the one you see in Finder)
-    'iconfile': 'icon_inactive.png',
+    'iconfile': 'Magic Clone.png',
 
     # Sets application metadata, like the name displayed in Finder and the menu bar.
     'plist': {
