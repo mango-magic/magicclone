@@ -150,18 +150,30 @@ def monitor_apps():
         time.sleep(1)
 
 def send_to_webhook(_):
-    if not os.path.exists(LOG_FILE) or os.stat(LOG_FILE).st_size == 0: return
+    if not os.path.exists(LOG_FILE) or os.stat(LOG_FILE).st_size == 0:
+        return
     try:
         with open(LOG_FILE, 'r') as f:
             logs = [json.loads(line.strip()) for line in f if line.strip()]
+        
         payload = {'user_id': USER_ID, 'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'), 'logs': logs}
-        requests.post(N8N_WEBHOOK_URL, json=payload)
+        
+        # Add a timeout and check the response for errors
+        response = requests.post(N8N_WEBHOOK_URL, json=payload, timeout=20)
+        response.raise_for_status()
         
         dated_file = os.path.join(ARCHIVE_DIR, f'activity_{time.strftime("%Y%m%d_%H%M%S")}.log')
         os.rename(LOG_FILE, dated_file)
         open(LOG_FILE, 'w').close()
+        
+    except requests.exceptions.Timeout:
+        print("Webhook send failed: The request timed out.")
+    except requests.exceptions.HTTPError as err:
+        print(f"Webhook send failed: HTTP Error {err.response.status_code} - {err.response.text}")
+    except requests.exceptions.RequestException as e:
+        print(f"Webhook send failed: A network error occurred: {e}")
     except Exception as e:
-        print(f"Webhook send failed: {e}")
+        print(f"An unexpected error occurred in send_to_webhook: {e}")
 
 def check_for_notifications(timer):
     if not N8N_NOTIFY_URL or 'YOUR_NEW_N8N_WEBHOOK_URL' in N8N_NOTIFY_URL: return
