@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # This script provides a user-friendly installer for the Mango Clone Workflow Tracker.
-# It displays a pop-up message and then runs the entire build process silently in the background.
+# It runs the entire build process with visible output in the terminal.
 
 # --- Main Build Logic ---
 run_build_process() {
@@ -97,11 +97,5 @@ EOF
     deactivate
 }
 
-# --- User Interface ---
-show_startup_message() {
-    osascript -e 'display dialog "✨ The cloning process is about to begin. Your app is now using Apple’s native OCR for a faster, more reliable experience. By your third sip of coffee, we can get started 🪄" with title "Mango Clone Setup" buttons {"Begin Installation"} default button "Begin Installation"'
-}
-
 # --- Script Execution ---
-show_startup_message
-run_build_process > /dev/null 2>&1 &
+run_build_process
