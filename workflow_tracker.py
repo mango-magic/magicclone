@@ -13,12 +13,13 @@ import cv2
 import numpy as np
 from PIL import Image
 
-# --- FIX: Explicitly set the path for the Tesseract engine ---
+# --- FIX: Set environment variables for the Tesseract engine ---
+os.environ['TESSDATA_PREFIX'] = '/opt/homebrew/share/tessdata'
 pytesseract.pytesseract.tesseract_cmd = '/opt/homebrew/bin/tesseract'
 
 # --- Configuration ---
 N8N_WEBHOOK_URL = 'https://automations.manymangoes.com.au/webhook/f846efd5-6f36-4d5e-9dd9-b69e128f04da'
-N8N_NOTIFY_URL = 'https://automations.manymangoes.com.au/webhook/d0cd7119-551d-453d-873c-5f9b9c0fd846' 
+N8N_NOTIFY_URL = 'https://automations.manymangoes.com.au/webhook/d0cd7119-551d-453d-873c-5f9b9c0fd846'
 LOG_FILE = 'activity.log'
 ARCHIVE_DIR = 'activity_archives'
 CONFIG_FILE = 'config.json'
