@@ -1,6 +1,7 @@
 rumps
 pynput
 pyobjc
+pyobjc-framework-Quartz
 requests
 py2app
 macholib
