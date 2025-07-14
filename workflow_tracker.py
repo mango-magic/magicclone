@@ -149,7 +149,7 @@ def monitor_apps():
                 log_action('app_switch', new_app)
         time.sleep(1)
 
-def send_to_webhook():
+def send_to_webhook(_):
     if not os.path.exists(LOG_FILE) or os.stat(LOG_FILE).st_size == 0: return
     try:
         with open(LOG_FILE, 'r') as f:
