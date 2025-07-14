@@ -1,8 +1,6 @@
 rumps
 pynput
 pyobjc
-pyobjc-framework-Quartz
-pyobjc-framework-Cocoa
 requests
 py2app
 macholib
@@ -12,3 +10,5 @@ setuptools<81
 mss
 Pillow
 pyobjc-framework-Vision
+pyobjc-framework-Quartz
+pyobjc-framework-Cocoa
