@@ -7,3 +7,6 @@ macholib
 altgraph
 modulegraph
 setuptools<81
+mss
+pytesseract
+Pillow
