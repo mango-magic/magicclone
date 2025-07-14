@@ -57,7 +57,7 @@ DATA_FILES = ['Magic Clone.png', 'icon_active.png', 'icon_inactive.png']
 OPTIONS = {
     'argv_emulation': False,
     'packages': ['rumps', 'pynput', 'requests', 'mss', 'PIL'],
-    'includes': ['AppKit', 'Foundation', 'Quartz', 'Vision'], # <-- Updated: Removed CoreGraphics and imp
+    'includes': ['AppKit', 'Foundation', 'Quartz', 'Vision', 'imp'], # <-- Updated: Added imp back to resolve pyobjc dependency in bundle
     'iconfile': 'Magic Clone.png',
     'plist': {
         'CFBundleDisplayName': 'Mango Clone',
