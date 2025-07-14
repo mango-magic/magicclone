@@ -10,7 +10,6 @@ setuptools<81
 mss
 Pillow
 pyobjc-framework-Vision
-pyobjc-framework-AppKit
-pyobjc-framework-Foundation
+pyobjc-framework-Cocoa
 pyobjc-framework-Quartz
 charset_normalizer
