@@ -92,7 +92,9 @@ echo "setup.py created successfully."
 
 # Build the application using the new setup.py
 echo "Building the app..."
-python setup.py py2app
+# Explicitly use the python from the virtual environment to build the app.
+# This ensures that py2app correctly locates the Python runtime for the bundle.
+./venv/bin/python setup.py py2app
 
 # --- Final Check and Launch ---
 if [ -d "dist/MagicClone.app" ]; then
