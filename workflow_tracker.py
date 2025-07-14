@@ -14,6 +14,11 @@ LOG_FILE = 'activity.log'
 ARCHIVE_DIR = 'activity_archives'
 SEND_INTERVAL = 900  # 15 minutes
 
+# --- Icon Files ---
+# Define paths for the icons that will be used in the menu bar.
+ICON_ACTIVE = 'icon_active.png'
+ICON_INACTIVE = 'icon_inactive.png'
+
 # --- Global State ---
 current_word = ''
 active_app = None
@@ -101,7 +106,8 @@ def send_to_webhook():
 
 class WorkflowTrackerApp(rumps.App):
     def __init__(self):
-        super(WorkflowTrackerApp, self).__init__("Tracker", quit_button="Quit")
+        super(WorkflowTrackerApp, self).__init__("Mango Clone", quit_button="Quit")
+        self.icon = ICON_INACTIVE  # Set the initial icon
         self.menu = [
             rumps.MenuItem('Start Tracking', callback=self.start_tracking),
             rumps.MenuItem('Pause Tracking', callback=self.pause_tracking),
@@ -116,19 +122,19 @@ class WorkflowTrackerApp(rumps.App):
         global tracking_active
         if tracking_active: return
         tracking_active = True
+        self.icon = ICON_ACTIVE # Set active (green) icon
         self.listener = keyboard.Listener(on_press=on_press)
         self.listener.start()
         self.send_timer.start()
-        self.title = "Tracker ●" # Indicate active state
 
     def pause_tracking(self, _):
         global tracking_active
         if not tracking_active: return
         tracking_active = False
+        self.icon = ICON_INACTIVE # Set inactive (red) icon
         if self.listener:
             self.listener.stop()
         self.send_timer.stop()
-        self.title = "Tracker" # Indicate inactive state
 
     def send_callback(self, timer):
         if tracking_active:
