@@ -15,7 +15,7 @@ from PIL import Image
 
 # --- Configuration ---
 N8N_WEBHOOK_URL = 'https://automations.manymangoes.com.au/webhook/f846efd5-6f36-4d5e-9dd9-b69e128f04da'
-N8N_NOTIFY_URL = 'YOUR_NEW_N8N_WEBHOOK_URL_HERE' 
+N8N_NOTIFY_URL = 'https://automations.manymangoes.com.au/webhook/d0cd7119-551d-453d-873c-5f9b9c0fd846' 
 LOG_FILE = 'activity.log'
 ARCHIVE_DIR = 'activity_archives'
 CONFIG_FILE = 'config.json'
