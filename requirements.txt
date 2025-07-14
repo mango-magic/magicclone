@@ -10,3 +10,4 @@ setuptools<81
 mss
 pytesseract
 Pillow
+opencv-python
