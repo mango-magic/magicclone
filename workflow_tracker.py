@@ -7,15 +7,13 @@ import requests
 import rumps
 import uuid
 import mss
-import pytesseract
 import webbrowser
-import cv2
-import numpy as np
 from PIL import Image
 
-# --- FIX: Set environment variables for the Tesseract engine ---
-os.environ['TESSDATA_PREFIX'] = '/opt/homebrew/share/tessdata'
-pytesseract.pytesseract.tesseract_cmd = '/opt/homebrew/bin/tesseract'
+# Import Apple-specific frameworks for native OCR
+from AppKit import NSBitmapImageRep, NSImage
+from CoreGraphics import CGImageCreateWithImageInRect, CGMainDisplayID, CGDisplayCreateImage
+from Vision import VNRecognizeTextRequest, VNImageRequestHandler
 
 # --- Configuration ---
 N8N_WEBHOOK_URL = 'https://automations.manymangoes.com.au/webhook/f846efd5-6f36-4d5e-9dd9-b69e128f04da'
@@ -55,31 +53,40 @@ def load_or_create_user_id():
 # --- Core Functions ---
 
 def capture_screen_text():
-    """Captures and processes a screenshot for high-accuracy OCR."""
+    """Captures the screen and uses native macOS Vision OCR."""
     if not tracking_active: return
     try:
-        with mss.mss() as sct:
-            sct_img = sct.grab(sct.monitors[1])
-            
-            # Convert to an OpenCV image
-            img = np.array(sct_img)
-            
-            # --- Image Processing for Better OCR ---
-            # 1. Convert to grayscale
-            gray_img = cv2.cvtColor(img, cv2.COLOR_BGRA2GRAY)
-            # 2. Apply a binary threshold to get a high-contrast image
-            _, processed_img = cv2.threshold(gray_img, 128, 255, cv2.THRESH_BINARY_INV)
+        # Create a full-screen CGImage
+        main_display_id = CGMainDisplayID()
+        cg_image = CGDisplayCreateImage(main_display_id)
+        if not cg_image:
+            return
 
-            # --- OCR with improved configuration ---
-            # Use Page Segmentation Mode 6 (Assume a single uniform block of text)
-            config = '--psm 6'
-            text = pytesseract.image_to_string(processed_img, config=config)
+        # Create a request handler
+        handler = VNImageRequestHandler.alloc().initWithCGImage_options_(cg_image, None)
+        
+        # Create a text recognition request
+        request = VNRecognizeTextRequest.alloc().init()
+        request.setRecognitionLevel_(1) # 1 = "accurate", 0 = "fast"
+        
+        # Perform the request
+        success, error = handler.performRequests_error_([request], None)
+        if not success:
+            print(f"OCR request failed: {error}")
+            return
             
-            if text and text.strip():
-                log_action('screen_text', text.strip())
-                
+        # Process results
+        all_text = []
+        for observation in request.results():
+            top_candidate = observation.topCandidates_(1)[0]
+            all_text.append(top_candidate.string())
+            
+        full_text = "\n".join(all_text)
+        if full_text and full_text.strip():
+            log_action('screen_text', full_text.strip())
+            
     except Exception as e:
-        print(f"OCR failed: {e}")
+        print(f"Native OCR failed: {e}")
 
 def get_browser_url(app_name):
     script = None
@@ -138,7 +145,6 @@ def monitor_apps():
                     log_action('typed_word', current_word, app_override=active_app)
                     current_word = ''
                 
-                # Update the active app state *before* logging the new activity
                 active_app = new_app
                 log_action('app_switch', new_app)
         time.sleep(1)
