@@ -202,6 +202,11 @@ class WorkflowTrackerApp(rumps.App):
             rumps.MenuItem('Start Tracking', callback=self.start_tracking),
             rumps.MenuItem('Pause Tracking', callback=self.pause_tracking),
             rumps.separator,
+            ('Manage Permissions', [
+                rumps.MenuItem('Grant Permissions...', callback=self.manage_grant_permissions),
+                rumps.MenuItem('Revoke Permissions...', callback=self.manage_revoke_permissions),
+            ]),
+            rumps.separator,
             rumps.MenuItem('View Activity Logs', callback=self.open_log_directory),
             rumps.separator,
             rumps.MenuItem('My Automations', callback=open_link),
@@ -264,6 +269,33 @@ class WorkflowTrackerApp(rumps.App):
     def open_log_directory(self, _):
         log_dir_path = os.path.abspath(ARCHIVE_DIR)
         subprocess.run(['open', log_dir_path])
+
+    def manage_grant_permissions(self, _):
+        """Shows instructions on how to grant necessary permissions."""
+        rumps.alert(
+            title="Grant Required Permissions",
+            message=(
+                "To function correctly, Mango Clone needs access to:\n\n"
+                "1.  **Accessibility:** To detect app switches and typed text.\n"
+                "2.  **Screen Recording:** To capture on-screen text for analysis.\n"
+                "3.  **Automation:** To get the URL from your web browser.\n\n"
+                "The app will now open 'Privacy & Security' settings. Please find and enable Mango Clone in the relevant sections."
+            ),
+            ok="Open System Settings"
+        )
+        webbrowser.open('x-apple.systempreferences:com.apple.preference.security')
+
+    def manage_revoke_permissions(self, _):
+        """Shows instructions on how to revoke permissions."""
+        rumps.alert(
+            title="Revoke Permissions",
+            message=(
+                "To revoke permissions, you must manually disable or remove Mango Clone from the 'Accessibility', 'Screen Recording', and 'Automation' sections in your system's 'Privacy & Security' settings."
+            ),
+            ok="Open System Settings"
+        )
+        webbrowser.open('x-apple.systempreferences:com.apple.preference.security')
+
 
 if __name__ == "__main__":
     WorkflowTrackerApp().run()
