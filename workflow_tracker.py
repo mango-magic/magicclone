@@ -41,10 +41,15 @@ if not os.path.exists(LOG_FILE):
     open(LOG_FILE, 'w').close()
 
 def load_or_create_user_id():
+    """Loads the user ID from the config file, or creates a new one."""
     global USER_ID
     if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, 'r') as f:
-            USER_ID = json.load(f).get('user_id')
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                USER_ID = json.load(f).get('user_id')
+        except (json.JSONDecodeError, AttributeError):
+            USER_ID = None # Handle corrupted or empty config file
+            
     if not USER_ID:
         USER_ID = str(uuid.uuid4())
         with open(CONFIG_FILE, 'w') as f:
@@ -53,13 +58,14 @@ def load_or_create_user_id():
 # --- Core Functions ---
 
 def capture_screen_text():
-    """Captures the screen and uses native macOS Vision OCR."""
+    """Captures the screen and uses native macOS Vision OCR to extract text."""
     if not tracking_active: return
     try:
         # Create a full-screen CGImage
         main_display_id = CGMainDisplayID()
         cg_image = CGDisplayCreateImage(main_display_id)
         if not cg_image:
+            print("Could not create screen image.")
             return
 
         # Create a request handler
@@ -76,51 +82,66 @@ def capture_screen_text():
             return
             
         # Process results
-        all_text = []
-        for observation in request.results():
-            top_candidate = observation.topCandidates_(1)[0]
-            all_text.append(top_candidate.string())
+        all_text = [
+            top_candidate.string()
+            for observation in request.results()
+            for top_candidate in observation.topCandidates_(1)
+        ]
             
         full_text = "\n".join(all_text)
         if full_text and full_text.strip():
             log_action('screen_text', full_text.strip())
             
     except Exception as e:
-        print(f"Native OCR failed: {e}")
+        print(f"An error occurred during native OCR: {e}")
 
 def get_browser_url(app_name):
+    """Gets the URL from the frontmost tab of Safari or Chrome."""
     script = None
     if 'Safari' in app_name:
         script = 'tell application "Safari" to return URL of current tab of window 1'
     elif 'Chrome' in app_name:
         script = 'tell application "Google Chrome" to return URL of active tab of window 1'
+    
     if not script: return None
+    
     try:
-        result = subprocess.run(['osascript', '-e', script], capture_output=True, text=True, check=False)
-        return result.stdout.strip()
-    except Exception:
+        # Execute the AppleScript and capture the output
+        result = subprocess.run(
+            ['osascript', '-e', script], 
+            capture_output=True, text=True, check=False, timeout=5
+        )
+        return result.stdout.strip() if result.returncode == 0 else None
+    except (subprocess.TimeoutExpired, Exception) as e:
+        print(f"Could not get browser URL: {e}")
         return None
 
 def on_press(key):
-    """Handles individual key presses, including backspace."""
+    """Handles key press events to log typed words."""
     global current_word
     from pynput import keyboard
     if not tracking_active: return
     
-    if key == keyboard.Key.backspace:
-        current_word = current_word[:-1]
-        return
-
     try:
-        if key.char:
+        if key == keyboard.Key.backspace:
+            # Handle backspace by removing the last character
+            current_word = current_word[:-1]
+            return
+
+        if hasattr(key, 'char') and key.char:
+            # Append character to the current word
             current_word += key.char
-    except AttributeError:
-        if key in [keyboard.Key.space, keyboard.Key.enter, keyboard.Key.tab]:
+        elif key in [keyboard.Key.space, keyboard.Key.enter, keyboard.Key.tab]:
+            # Log the word when a separator key is pressed
             if current_word:
                 log_action('typed_word', current_word)
                 current_word = ''
+    except Exception as e:
+        print(f"Error in on_press: {e}")
+
 
 def log_action(action_type, data, app_override=None, url_override=None):
+    """Logs an action to the log file."""
     if not tracking_active: return
     
     app_name = app_override if app_override is not None else (active_app or 'Unknown')
@@ -128,54 +149,74 @@ def log_action(action_type, data, app_override=None, url_override=None):
 
     entry = {
         'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
-        'app': app_name, 'action': action_type, 'data': data, 'url': url
+        'user_id': USER_ID,
+        'app': app_name, 
+        'action': action_type, 
+        'data': data, 
+        'url': url
     }
-    with open(LOG_FILE, 'a') as f:
-        f.write(json.dumps(entry) + '\n')
+    try:
+        with open(LOG_FILE, 'a') as f:
+            f.write(json.dumps(entry) + '\n')
+    except IOError as e:
+        print(f"Could not write to log file: {e}")
 
 def monitor_apps():
-    """Monitors for app switches and logs pending words correctly."""
+    """Monitors for application switches and logs the active application."""
     global active_app, current_word
     from AppKit import NSWorkspace
+    
     while True:
         if tracking_active:
-            new_app = (NSWorkspace.sharedWorkspace().frontmostApplication().localizedName() or 'Unknown')
-            if new_app != active_app:
-                if current_word:
-                    log_action('typed_word', current_word, app_override=active_app)
-                    current_word = ''
+            try:
+                new_app_instance = NSWorkspace.sharedWorkspace().frontmostApplication()
+                new_app = new_app_instance.localizedName() if new_app_instance else 'Unknown'
                 
-                active_app = new_app
-                log_action('app_switch', new_app)
-        time.sleep(1)
+                if new_app != active_app:
+                    # If there's a pending word, log it before switching context
+                    if current_word:
+                        log_action('typed_word', current_word, app_override=active_app)
+                        current_word = ''
+                    
+                    active_app = new_app
+                    log_action('app_switch', new_app)
+            except Exception as e:
+                print(f"Error monitoring apps: {e}")
+        time.sleep(1) # Check every second
 
 def send_to_webhook(_):
+    """Sends the contents of the log file to the webhook and archives it."""
     if not os.path.exists(LOG_FILE) or os.stat(LOG_FILE).st_size == 0:
         return
-    try:
-        with open(LOG_FILE, 'r') as f:
-            logs = [json.loads(line.strip()) for line in f if line.strip()]
         
+    # Create a unique filename for the archive before sending
+    dated_file = os.path.join(ARCHIVE_DIR, f'activity_{time.strftime("%Y%m%d_%H%M%S")}.log')
+    
+    try:
+        # Rename the file first. If sending fails, the data is safe in the archive.
+        os.rename(LOG_FILE, dated_file)
+        open(LOG_FILE, 'w').close() # Create a new empty log file immediately
+
+        with open(dated_file, 'r') as f:
+            logs = [json.loads(line) for line in f if line.strip()]
+        
+        if not logs: return
+
         payload = {'user_id': USER_ID, 'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'), 'logs': logs}
         
-        # Add a timeout and check the response for errors
         response = requests.post(N8N_WEBHOOK_URL, json=payload, timeout=20)
-        response.raise_for_status()
+        response.raise_for_status() # Raise an exception for bad status codes
         
-        dated_file = os.path.join(ARCHIVE_DIR, f'activity_{time.strftime("%Y%m%d_%H%M%S")}.log')
-        os.rename(LOG_FILE, dated_file)
-        open(LOG_FILE, 'w').close()
-        
-    except requests.exceptions.Timeout:
-        print("Webhook send failed: The request timed out.")
-    except requests.exceptions.HTTPError as err:
-        print(f"Webhook send failed: HTTP Error {err.response.status_code} - {err.response.text}")
     except requests.exceptions.RequestException as e:
         print(f"Webhook send failed: A network error occurred: {e}")
+        # Note: The file is already archived, so data is not lost.
+    except (IOError, json.JSONDecodeError) as e:
+        print(f"Error reading or processing log file {dated_file}: {e}")
     except Exception as e:
         print(f"An unexpected error occurred in send_to_webhook: {e}")
 
 def check_for_notifications(timer):
+    """Polls the notification webhook for new messages to display."""
     if not N8N_NOTIFY_URL or 'YOUR_NEW_N8N_WEBHOOK_URL' in N8N_NOTIFY_URL: return
     try:
         response = requests.get(N8N_NOTIFY_URL, params={'user_id': USER_ID}, timeout=10)
@@ -183,6 +224,7 @@ def check_for_notifications(timer):
             for notification in response.json():
                 rumps.notification(
                     title=notification.get('title', 'New Message'),
+                    subtitle=notification.get('subtitle', ''),
                     message=notification.get('body', '')
                 )
     except requests.RequestException as e:
@@ -196,8 +238,11 @@ class WorkflowTrackerApp(rumps.App):
         self.icon = ICON_INACTIVE
         self.listener = None
         
-        def open_link(sender): webbrowser.open(sender.url)
+        def open_link(sender):
+            if hasattr(sender, 'url'):
+                webbrowser.open(sender.url)
 
+        # --- Menu Definition ---
         self.menu = [
             rumps.MenuItem('Start Tracking', callback=self.start_tracking),
             rumps.MenuItem('Pause Tracking', callback=self.pause_tracking),
@@ -213,7 +258,6 @@ class WorkflowTrackerApp(rumps.App):
             ('Help & Resources', [
                 rumps.MenuItem('Quickstart Guide', callback=open_link),
                 rumps.MenuItem('Documentation', callback=open_link),
-                rumps.MenuItem('Courses', callback=open_link),
                 rumps.MenuItem('Community Forum', callback=open_link),
             ]),
             rumps.separator,
@@ -222,25 +266,34 @@ class WorkflowTrackerApp(rumps.App):
             rumps.separator,
             rumps.MenuItem('Quit', callback=rumps.quit_application)
         ]
+        
+        # Set URLs for menu items that open links
         self.menu['My Automations'].url = 'https://setup.manymangoes.com.au/automations'
         self.menu['Help & Resources']['Quickstart Guide'].url = 'https://setup.manymangoes.com.au/quickstart'
         self.menu['Help & Resources']['Documentation'].url = 'https://setup.manymangoes.com.au/docs'
-        self.menu['Help & Resources']['Courses'].url = 'https://setup.manymangoes.com.au/courses'
         self.menu['Help & Resources']['Community Forum'].url = 'https://setup.manymangoes.com.au/forum'
         self.menu['About Mango Clone'].url = 'https://setup.manymangoes.com.au/about'
         self.menu['Report a Bug'].url = 'https://setup.manymangoes.com.au/report-bug'
         
-        self.app_thread = threading.Thread(target=monitor_apps, daemon=True)
-        self.app_thread.start()
+        # --- Timers and Threads ---
+        self.app_monitor_thread = threading.Thread(target=monitor_apps, daemon=True)
+        self.app_monitor_thread.start()
+        
         self.send_timer = rumps.Timer(send_to_webhook, SEND_INTERVAL)
         self.notification_poll_timer = rumps.Timer(check_for_notifications, POLL_INTERVAL)
         self.ocr_timer = rumps.Timer(lambda _: capture_screen_text(), OCR_INTERVAL)
+        
+        # Start tracking automatically on launch
         self.start_tracking(None)
 
     def start_tracking(self, _):
-        """Creates and starts a new listener and all timers."""
+        """Starts the key listener and all timers."""
         global tracking_active
-        if tracking_active: return
+        if tracking_active: 
+            print("Tracking is already active.")
+            return
+        
+        print("Starting tracking...")
         tracking_active = True
         self.icon = ICON_ACTIVE
         
@@ -248,54 +301,75 @@ class WorkflowTrackerApp(rumps.App):
         self.listener = keyboard.Listener(on_press=on_press)
         self.listener.start()
         
-        send_to_webhook(None)  # <-- ADD THIS LINE
+        # Send any logs that might exist from a previous session
+        send_to_webhook(None)
+        
         self.send_timer.start()
         self.notification_poll_timer.start()
         self.ocr_timer.start()
 
     def pause_tracking(self, _):
-        """Stops the listener and all timers."""
+        """Stops the key listener and all timers."""
         global tracking_active
-        if not tracking_active: return
+        if not tracking_active: 
+            print("Tracking is already paused.")
+            return
+
+        print("Pausing tracking...")
         tracking_active = False
         self.icon = ICON_INACTIVE
         
-        if self.listener: self.listener.stop()
+        if self.listener: 
+            self.listener.stop()
+            self.listener = None
         
         self.send_timer.stop()
         self.notification_poll_timer.stop()
         self.ocr_timer.stop()
+        
+        # On pause, send any remaining logs
+        send_to_webhook(None)
 
     def open_log_directory(self, _):
+        """Opens the activity log archive directory in Finder."""
         log_dir_path = os.path.abspath(ARCHIVE_DIR)
         subprocess.run(['open', log_dir_path])
 
     def manage_grant_permissions(self, _):
         """Shows instructions on how to grant necessary permissions."""
-        rumps.alert(
+        response = rumps.alert(
             title="Grant Required Permissions",
             message=(
-                "To function correctly, Mango Clone needs access to:\n\n"
+                "For full functionality, Mango Clone needs your permission.\n\n"
+                "macOS requires you to manually enable:\n"
                 "1.  **Accessibility:** To detect app switches and typed text.\n"
-                "2.  **Screen Recording:** To capture on-screen text for analysis.\n"
+                "2.  **Screen Recording:** To capture on-screen text.\n"
                 "3.  **Automation:** To get the URL from your web browser.\n\n"
-                "The app will now open 'Privacy & Security' settings. Please find and enable Mango Clone in the relevant sections."
+                "Click 'Open System Settings' to go to the 'Privacy & Security' pane. "
+                "You will need to find Mango Clone in each of the sections above and enable it."
             ),
-            ok="Open System Settings"
+            ok="Open System Settings",
+            cancel="Cancel"
         )
-        webbrowser.open('x-apple.systempreferences:com.apple.preference.security')
+        if response == 1: # OK button was clicked
+            # This URL opens the main Privacy & Security pane
+            webbrowser.open('x-apple.systempreferences:com.apple.preference.security')
 
     def manage_revoke_permissions(self, _):
         """Shows instructions on how to revoke permissions."""
-        rumps.alert(
+        response = rumps.alert(
             title="Revoke Permissions",
             message=(
-                "To revoke permissions, you must manually disable or remove Mango Clone from the 'Accessibility', 'Screen Recording', and 'Automation' sections in your system's 'Privacy & Security' settings."
+                "To revoke permissions, you must manually disable or remove Mango Clone from the 'Accessibility', 'Screen Recording', and 'Automation' sections in your system's 'Privacy & Security' settings.\n\n"
+                "Click 'Open System Settings' to manage your permissions."
             ),
-            ok="Open System Settings"
+            ok="Open System Settings",
+            cancel="Cancel"
         )
-        webbrowser.open('x-apple.systempreferences:com.apple.preference.security')
+        if response == 1: # OK button was clicked
+            webbrowser.open('x-apple.systempreferences:com.apple.preference.security')
 
 
 if __name__ == "__main__":
-    WorkflowTrackerApp().run()
+    app = WorkflowTrackerApp()
+    app.run()
