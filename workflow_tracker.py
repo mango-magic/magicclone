@@ -5,19 +5,20 @@ import threading
 import subprocess
 import requests
 import rumps
-import webbrowser
-import uuid # Used for the unique ID
+import uuid
+import mss
+import pytesseract
+from PIL import Image
 
 # --- Configuration ---
 N8N_WEBHOOK_URL = 'https://automations.manymangoes.com.au/webhook/f846efd5-6f36-4d5e-9dd9-b69e128f04da'
-# !!! ADD YOUR NEW N8N WEBHOOK URL FOR FETCHING NOTIFICATIONS HERE !!!
-N8N_NOTIFY_URL = 'YOUR_NEW_N8N_WEBHOOK_URL_HERE' # e.g., https://automations.manymangoes.com.au/webhook/get-notifications
-
+N8N_NOTIFY_URL = 'YOUR_NEW_N8N_WEBHOOK_URL_HERE' 
 LOG_FILE = 'activity.log'
 ARCHIVE_DIR = 'activity_archives'
 CONFIG_FILE = 'config.json'
 SEND_INTERVAL = 900  # 15 minutes
 POLL_INTERVAL = 60   # Check for notifications every 60 seconds
+OCR_INTERVAL = 30    # Capture screen text every 30 seconds
 
 # --- Icon Files ---
 ICON_ACTIVE = 'icon_active.png'
@@ -35,20 +36,40 @@ if not os.path.exists(LOG_FILE):
     open(LOG_FILE, 'w').close()
 
 def load_or_create_user_id():
-    """Loads a unique user ID from config.json, or creates and saves one if it doesn't exist."""
     global USER_ID
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, 'r') as f:
-            config = json.load(f)
-            USER_ID = config.get('user_id')
+            USER_ID = json.load(f).get('user_id')
     if not USER_ID:
         USER_ID = str(uuid.uuid4())
         with open(CONFIG_FILE, 'w') as f:
             json.dump({'user_id': USER_ID}, f)
 
 # --- Core Functions ---
+
+def capture_screen_text():
+    """Captures a screenshot and uses OCR to extract text."""
+    if not tracking_active: return
+    try:
+        with mss.mss() as sct:
+            # Get information of monitor 1
+            monitor_number = 1
+            mon = sct.monitors[monitor_number]
+
+            # Grab the data
+            sct_img = sct.grab(mon)
+            img = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
+
+            # Use Tesseract to do OCR on the image
+            text = pytesseract.image_to_string(img)
+            
+            if text and text.strip():
+                log_action('screen_text', text.strip())
+                
+    except Exception as e:
+        print(f"OCR failed: {e}")
+
 def get_browser_url(app_name):
-    # (This function is unchanged)
     script = None
     if 'Safari' in app_name:
         script = 'tell application "Safari" to return URL of current tab of window 1'
@@ -63,8 +84,8 @@ def get_browser_url(app_name):
         return None
 
 def on_press(key):
-    # (This function is unchanged)
     global current_word
+    from pynput import keyboard
     if not tracking_active: return
     try:
         if key.char:
@@ -75,16 +96,19 @@ def on_press(key):
                 log_action('typed_word', current_word)
                 current_word = ''
         else:
-            log_action('keystroke', str(key))
+            # Optionally log special keys, but can be noisy.
+            # log_action('keystroke', str(key))
+            pass
 
-def log_action(action_type, data):
-    # (This function is unchanged)
+def log_action(action_type, data, app_override=None, url_override=None):
     if not tracking_active: return
-    active_app_name = (NSWorkspace.sharedWorkspace().frontmostApplication().localizedName() or 'Unknown')
-    url = get_browser_url(active_app_name)
+    
+    app_name = app_override if app_override is not None else (active_app or 'Unknown')
+    url = url_override if url_override is not None else get_browser_url(app_name)
+
     entry = {
         'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
-        'app': active_app_name,
+        'app': app_name,
         'action': action_type,
         'data': data,
         'url': url
@@ -93,24 +117,28 @@ def log_action(action_type, data):
         f.write(json.dumps(entry) + '\n')
 
 def monitor_apps():
-    # (This function is unchanged)
-    global active_app
+    global active_app, current_word
+    from AppKit import NSWorkspace
     while True:
         if tracking_active:
             new_app = (NSWorkspace.sharedWorkspace().frontmostApplication().localizedName() or 'Unknown')
             if new_app != active_app:
+                # Log any pending word from the *previous* app before switching
+                if current_word:
+                    previous_url = get_browser_url(active_app)
+                    log_action('typed_word', current_word, app_override=active_app, url_override=previous_url)
+                    current_word = ''
+                
                 log_action('app_switch', new_app)
                 active_app = new_app
         time.sleep(1)
 
 def send_to_webhook():
-    """Sends the activity log to n8n, now including the user ID."""
     if not os.path.exists(LOG_FILE) or os.stat(LOG_FILE).st_size == 0: return
     try:
         with open(LOG_FILE, 'r') as f:
             logs = [json.loads(line.strip()) for line in f if line.strip()]
         
-        # Add the unique user ID to the payload
         payload = {'user_id': USER_ID, 'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'), 'logs': logs}
         requests.post(N8N_WEBHOOK_URL, json=payload)
         
@@ -121,21 +149,16 @@ def send_to_webhook():
         print(f"Webhook send failed: {e}")
 
 def check_for_notifications(timer):
-    """Polls the n8n notification webhook for new messages."""
     if not N8N_NOTIFY_URL or 'YOUR_NEW_N8N_WEBHOOK_URL' in N8N_NOTIFY_URL:
-        return # Don't run if the URL isn't set
+        return
     try:
-        # Ask the webhook for notifications for our specific user ID
         params = {'user_id': USER_ID}
         response = requests.get(N8N_NOTIFY_URL, params=params, timeout=10)
         
         if response.status_code == 200:
-            notifications = response.json()
-            # The n8n workflow should return a list, even if it's empty
-            for notification in notifications:
+            for notification in response.json():
                 rumps.notification(
                     title=notification.get('title', 'New Message from Magic Clone'),
-                    subtitle=None,
                     message=notification.get('body', '')
                 )
     except requests.RequestException as e:
@@ -144,28 +167,20 @@ def check_for_notifications(timer):
 # --- Main Application Class ---
 class WorkflowTrackerApp(rumps.App):
     def __init__(self):
-        super(WorkflowTrackerApp, self).__init__("Mango Clone", quit_button=None)
-        load_or_create_user_id() # Ensure we have a user ID on start
+        super(WorkflowTrackerApp, self).__init__("Mango Clone", quit_button="Quit")
+        load_or_create_user_id()
         self.icon = ICON_INACTIVE
         self.menu = [
-            # (Menu is unchanged)
             rumps.MenuItem('Start Tracking', callback=self.start_tracking),
             rumps.MenuItem('Pause Tracking', callback=self.pause_tracking),
-            rumps.separator,
-            rumps.MenuItem('View Activity Logs', callback=self.open_log_directory),
-            rumps.separator,
-            # ... other menu items
         ]
-        
-        # --- Initialize Threads and Timers ---
-        self.listener = None
+        from pynput import keyboard
+        self.listener = keyboard.Listener(on_press=on_press)
         self.app_thread = threading.Thread(target=monitor_apps, daemon=True)
         self.app_thread.start()
-        self.send_timer = rumps.Timer(self.send_callback, SEND_INTERVAL)
-        
-        # --- NEW: Timer for polling notifications ---
+        self.send_timer = rumps.Timer(send_to_webhook, SEND_INTERVAL)
         self.notification_poll_timer = rumps.Timer(check_for_notifications, POLL_INTERVAL)
-        
+        self.ocr_timer = rumps.Timer(lambda _: capture_screen_text(), OCR_INTERVAL)
         self.start_tracking(None)
 
     def start_tracking(self, _):
@@ -173,30 +188,24 @@ class WorkflowTrackerApp(rumps.App):
         if tracking_active: return
         tracking_active = True
         self.icon = ICON_ACTIVE
-        self.listener = keyboard.Listener(on_press=on_press)
-        self.listener.start()
+        if not self.listener.is_alive():
+            self.listener.start()
         self.send_timer.start()
-        self.notification_poll_timer.start() # Start polling when tracking starts
+        self.notification_poll_timer.start()
+        self.ocr_timer.start()
 
     def pause_tracking(self, _):
         global tracking_active
         if not tracking_active: return
         tracking_active = False
         self.icon = ICON_INACTIVE
-        if self.listener:
-            self.listener.stop()
+        self.listener.stop()
+        # Recreate listener for next start
+        from pynput import keyboard
+        self.listener = keyboard.Listener(on_press=on_press)
         self.send_timer.stop()
-        self.notification_poll_timer.stop() # Stop polling when paused
-
-    def open_log_directory(self, _):
-        # (This function is unchanged)
-        log_dir_path = os.path.abspath(ARCHIVE_DIR)
-        subprocess.run(['open', log_dir_path])
-
-    def send_callback(self, timer):
-        # (This function is unchanged)
-        if tracking_active:
-            send_to_webhook()
+        self.notification_poll_timer.stop()
+        self.ocr_timer.stop()
 
 if __name__ == "__main__":
     WorkflowTrackerApp().run()
