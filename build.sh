@@ -54,12 +54,25 @@ run_build_process() {
     echo "Creating correct setup.py configuration..."
     cat << EOF > setup.py
 from setuptools import setup
+import os
+import cv2
+import glob
 
+# --- Find and prepare OpenCV data files ---
+cv2_data_path = os.path.join(os.path.dirname(cv2.__file__), 'data')
+cv2_data_files = glob.glob(os.path.join(cv2_data_path, '*.xml'))
+
+# --- Application Details ---
 APP = ['workflow_tracker.py']
-DATA_FILES = ['Magic Clone.png', 'icon_active.png', 'icon_inactive.png']
+DATA_FILES = [
+    'Magic Clone.png', 'icon_active.png', 'icon_inactive.png',
+    ('data', cv2_data_files)
+]
+
+# --- py2app Options ---
 OPTIONS = {
     'argv_emulation': False,
-    'packages': ['rumps', 'pynput', 'requests', 'mss', 'pytesseract', 'PIL'],
+    'packages': ['rumps', 'pynput', 'requests', 'mss', 'pytesseract', 'PIL', 'cv2', 'numpy'],
     'includes': ['AppKit', 'Foundation', 'Quartz', 'imp'],
     'iconfile': 'Magic Clone.png',
     'plist': {
@@ -69,6 +82,7 @@ OPTIONS = {
     }
 }
 
+# --- Setup Configuration ---
 setup(
     app=APP,
     data_files=DATA_FILES,
