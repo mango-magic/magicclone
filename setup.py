@@ -1,25 +1,30 @@
 from setuptools import setup
+import os
+import cv2
+import glob
+
+# --- Find and prepare OpenCV data files ---
+cv2_data_path = os.path.join(os.path.dirname(cv2.__file__), 'data')
+cv2_data_files = glob.glob(os.path.join(cv2_data_path, '*.xml'))
 
 # --- Application Details ---
 APP = ['workflow_tracker.py']
-# Include all icon files in the application bundle
-DATA_FILES = ['Magic Clone.png', 'icon_active.png', 'icon_inactive.png']
+DATA_FILES = [
+    'Magic Clone.png', 'icon_active.png', 'icon_inactive.png',
+    ('data', cv2_data_files) # Include the OpenCV data files
+]
 
 # --- py2app Options ---
-# This dictionary contains all the configurations for py2app to build the app correctly.
 OPTIONS = {
     'argv_emulation': False,
-    'packages': ['rumps', 'pynput', 'requests'],
+    # Add cv2 and numpy to the packages list
+    'packages': ['rumps', 'pynput', 'requests', 'mss', 'pytesseract', 'PIL', 'cv2', 'numpy'],
     'includes': ['AppKit', 'Foundation', 'Quartz', 'imp'],
-    
-    # Set the main application icon (this is the one you see in Finder)
     'iconfile': 'Magic Clone.png',
-
-    # Sets application metadata, like the name displayed in Finder and the menu bar.
     'plist': {
         'CFBundleDisplayName': 'Mango Clone',
         'CFBundleName': 'MangoClone',
-        'LSUIElement': True,  # This hides the app's icon from the Dock
+        'LSUIElement': True,
     }
 }
 
